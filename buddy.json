@@ -1,0 +1,11 @@
+{
+  "name": "rbotnet",
+  "version": "x.x.x",
+  "description": "A simple botnet written in Rust",
+  "author": "dreadster3",
+  "scripts": {
+    "build": "cargo build",
+    "run:server": "cargo run --bin rbnet_server",
+    "run:client": "cargo run --bin rbnet_client"
+  }
+}
