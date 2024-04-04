@@ -1,38 +1,38 @@
-use log::info;
 use std::sync::Arc;
-use tokio::{net::TcpStream, sync::Semaphore};
 
-use crate::server::session::Session;
-use crate::server::state::State;
+use log::info;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::Semaphore,
+};
 
-use super::state;
+use crate::server::admin_session::AdminSession;
 
-pub struct Server {
-    listener: tokio::net::TcpListener,
+use super::state::{self, State};
 
-    limit_connections: Arc<Semaphore>,
+pub struct AdminServer {
+    listener: TcpListener,
 
     state: State,
+    client_state: State,
+
+    limit_connections: Arc<Semaphore>,
 }
 
-impl Server {
-    pub async fn new(host: &str, port: u16) -> Result<Server, std::io::Error> {
-        let addr = format!("{}:{}", host, port);
-        let listener = tokio::net::TcpListener::bind(&addr).await?;
+impl AdminServer {
+    pub async fn new(client_state: State, host: &str, port: u16) -> Result<Self, std::io::Error> {
+        let listener = TcpListener::bind(format!("{}:{}", host, port)).await?;
 
-        Ok(Server {
+        Ok(Self {
             listener,
-            limit_connections: Arc::new(Semaphore::new(1000)),
+            client_state: Arc::clone(&client_state),
             state: state::new(),
+            limit_connections: Arc::new(Semaphore::new(1000)),
         })
     }
 
-    pub async fn get_state(&self) -> State {
-        Arc::clone(&self.state)
-    }
-
     pub async fn run(self) -> Result<(), std::io::Error> {
-        info!(target: "server_events", "Accepting connections on: {}", self.listener.local_addr()?);
+        info!(target: "admin_server_events", "Accepting connections on: {}", self.listener.local_addr()?);
 
         loop {
             let permit = self
@@ -43,12 +43,10 @@ impl Server {
                 .unwrap();
 
             let socket = self.accept().await?;
-
-            let (mut session, transmitter) = Session::new(socket).await?;
-            let session_id = session.get_id();
             let state = Arc::clone(&self.state);
+            let (mut session, transmitter) = AdminSession::new(socket).await?;
 
-            state::add_session(Arc::clone(&state), session_id, transmitter).await;
+            state::add_session(Arc::clone(&state), session.get_id(), transmitter).await;
 
             tokio::spawn(async move {
                 session.handle(state).await.unwrap();
@@ -63,7 +61,7 @@ impl Server {
         loop {
             match self.listener.accept().await {
                 Ok((socket, _)) => {
-                    log::info!(target: "server_events", "Accepted connection from: {}", socket.peer_addr()?);
+                    log::info!(target: "admin_server_events", "Accepted connection from: {}", socket.peer_addr()?);
                     return Ok(socket);
                 }
                 Err(e) => {
