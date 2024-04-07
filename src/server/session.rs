@@ -1,48 +1,47 @@
 use futures::SinkExt;
 use log::{error, info};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::{net::TcpStream, sync::Mutex};
+use std::{net::SocketAddr, sync::Arc};
+use tokio::net::TcpStream;
 use tokio_stream::StreamExt;
-use tokio_util::codec::{Framed, LinesCodec};
+use tokio_util::bytes::Bytes;
+use tokio_util::codec::{BytesCodec, Framed};
+
+use super::state::State;
+use super::{Receiver, Sender};
 
 #[derive(Debug)]
 pub struct Session {
     id: String,
     address: SocketAddr,
-    line_framed_stream: Framed<TcpStream, LinesCodec>,
-    receiver: tokio::sync::mpsc::UnboundedReceiver<String>,
+    line_framed_stream: Framed<TcpStream, BytesCodec>,
+    receiver: Receiver,
 }
 
 impl Session {
-    pub async fn new(
-        stream: TcpStream,
-    ) -> Result<(Self, tokio::sync::mpsc::UnboundedSender<String>), std::io::Error> {
+    pub async fn new(stream: TcpStream) -> Result<(Self, Sender), std::io::Error> {
         let address = stream.peer_addr().unwrap();
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Bytes>();
 
         Ok((
             Self {
                 id: uuid::Uuid::new_v4().to_string(),
                 address,
-                line_framed_stream: Framed::new(stream, LinesCodec::new()),
+                line_framed_stream: Framed::new(stream, BytesCodec::new()),
                 receiver: rx,
             },
             tx,
         ))
     }
 
-    pub async fn handle(
-        &mut self,
-        state: Arc<Mutex<HashMap<String, UnboundedSender<String>>>>,
-    ) -> Result<(), std::io::Error> {
+    pub async fn handle(&mut self, state: State) -> Result<(), std::io::Error> {
         let state = Arc::clone(&state);
         info!(target: "session_events", session_id=self.get_id(), address=self.get_address().to_string(); "Opening session");
         loop {
             tokio::select! {
-                Some(msg) = self.receiver.recv() => {
+                Some(bytes) = self.receiver.recv() => {
+                    let msg = String::from_utf8(bytes.to_vec()).unwrap();
                     info!(target: "session_events", session_id=self.get_id(); "Sending Message: {}", msg);
-                    match self.line_framed_stream.send(format!("Server: {}", msg)).await {
+                    match self.line_framed_stream.send(Bytes::from(format!("Server: {}", msg))).await {
                         Ok(_) => {
                             info!(target: "session_events", session_id=self.get_id(); "Message sent");
                         }
@@ -53,11 +52,13 @@ impl Session {
                 }
                 result = self.line_framed_stream.next() => {
                     match result {
-                        Some(Ok(line)) => {
+                        Some(Ok(bytes)) => {
+                            let line = String::from_utf8(bytes.to_vec()).unwrap();
                             info!(target: "session_events", session_id=self.get_id(); "Received: {}", line);
                             let sessions = state.lock().await;
-                            let transmitter = sessions.get(&self.id).unwrap();
-                            transmitter.send(line).unwrap();
+                            let connection = sessions.get(&self.id).unwrap();
+                            let transmitter = connection.get_sender();
+                            transmitter.send(Bytes::from(line)).unwrap();
                         }
                         Some(Err(e)) => {
                             error!(target: "session_events", session_id=self.get_id(); "Error reading line: {}", e);

@@ -1,5 +1,4 @@
 use futures::{SinkExt, StreamExt};
-use tokio::io::AsyncReadExt;
 use tokio::net::TcpStream;
 use tokio_util::codec::{Framed, LinesCodec};
 

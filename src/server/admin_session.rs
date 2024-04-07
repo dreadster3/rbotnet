@@ -1,67 +1,89 @@
 use futures::SinkExt;
 use log::{error, info};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tokio::sync::mpsc::UnboundedSender;
-use tokio::{net::TcpStream, sync::Mutex};
-use tokio_stream::StreamExt;
-use tokio_util::codec::{Framed, LinesCodec};
+use std::{net::SocketAddr, sync::Arc};
+use tokio::net::TcpStream;
+use tokio_util::{
+    bytes::{Bytes, BytesMut},
+    codec::{BytesCodec, Framed},
+};
 
-use super::state::State;
+use crate::cmd::{
+    command::Command,
+    frame::{Frame, FrameError},
+};
+
+use super::{state::State, Receiver, Sender};
 
 #[derive(Debug)]
 pub struct AdminSession {
     id: String,
     address: SocketAddr,
-    line_framed_stream: Framed<TcpStream, LinesCodec>,
-    receiver: tokio::sync::mpsc::UnboundedReceiver<String>,
+    bytes_stream: Framed<TcpStream, BytesCodec>,
+    receiver: Receiver,
+    buffer: BytesMut,
 }
 
 impl AdminSession {
-    pub async fn new(
-        stream: TcpStream,
-    ) -> Result<(Self, tokio::sync::mpsc::UnboundedSender<String>), std::io::Error> {
+    pub async fn new(stream: TcpStream) -> Result<(Self, Sender), std::io::Error> {
         let address = stream.peer_addr().unwrap();
-        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+        let (tx, rx) = tokio::sync::mpsc::unbounded_channel::<Bytes>();
 
         Ok((
             Self {
                 id: uuid::Uuid::new_v4().to_string(),
                 address,
-                line_framed_stream: Framed::new(stream, LinesCodec::new()),
+                bytes_stream: Framed::new(stream, BytesCodec::new()),
                 receiver: rx,
+                buffer: BytesMut::new(),
             },
             tx,
         ))
     }
 
-    pub async fn handle(&mut self, state: State) -> Result<(), std::io::Error> {
-        let state = Arc::clone(&state);
+    pub async fn handle(
+        &mut self,
+        admin_connections: State,
+        client_connections: State,
+    ) -> Result<(), std::io::Error> {
+        let client_connections = Arc::clone(&client_connections);
         info!(target: "session_events", session_id=self.get_id(), address=self.get_address().to_string(); "Opening session");
+
+        // let text = "*2\r\n+GET\r\n+SESSIONS\r\n";
+        // let bytes = Bytes::from(text);
+        // let frame = Frame::deserialize(bytes).unwrap();
+        // self.bytes_stream.send(frame.serialize().unwrap()).await?;
+
         loop {
             tokio::select! {
-                Some(msg) = self.receiver.recv() => {
-                    info!(target: "session_events", session_id=self.get_id(); "Sending Message: {}", msg);
-                    match self.line_framed_stream.send(format!("Server: {}", msg)).await {
-                        Ok(_) => {
-                            info!(target: "admin_session_events", session_id=self.get_id(); "Message sent");
+                Some(bytes) = self.receiver.recv() => {
+                    info!(target: "session_events", session_id=self.get_id(); "Sending Message: {}", String::from_utf8(bytes.clone().to_vec()).unwrap());
+                    self.bytes_stream.send(bytes).await?;
+                }
+                result = Frame::from_stream(&mut self.bytes_stream, &mut self.buffer) => {
+                    match result {
+                        Ok(frame) => {
+                            info!(target: "admin_session_events", session_id=self.get_id(); "Received frame: {:?}", frame);
+                            let command = Command::from_frame(frame).unwrap();
+                            let admin_connections = admin_connections.lock().await;
+                            let admin_connection = admin_connections.get(&self.id).unwrap();
+
+                            match command.execute(admin_connection, client_connections.clone()).await {
+                                Ok(_) => {
+                                    info!(target: "admin_session_events", session_id=self.get_id(); "Command executed");
+                                }
+                                Err(e) => {
+                                    error!(target: "admin_session_events", session_id=self.get_id(); "Error executing command: {}", e);
+                                }
+                            }
+
+                        }
+                        Err(FrameError::EndOfStream) => {
+                            info!(target: "admin_session_events", session_id=self.get_id(); "End of stream");
+                            break;
                         }
                         Err(e) => {
-                            error!(target: "admin_session_events", session_id=self.get_id(); "Error sending message: {}", e);
+                            error!(target: "admin_session_events", session_id=self.get_id(); "Error reading line: {:?}", e);
                         }
-                    }
-                }
-                result = self.line_framed_stream.next() => {
-                    match result {
-                        Some(Ok(line)) => {
-                            info!(target: "admin_session_events", session_id=self.get_id(); "Received: {}", line);
-                            let sessions = state.lock().await;
-                            let transmitter = sessions.get(&self.id).unwrap();
-                            transmitter.send(line).unwrap();
-                        }
-                        Some(Err(e)) => {
-                            error!(target: "admin_session_events", session_id=self.get_id(); "Error reading line: {}", e);
-                        }
-                        None => break
                     }
                 }
             }
@@ -70,7 +92,7 @@ impl AdminSession {
         info!(target: "session_events", session_id=self.get_id(), address=self.get_address().to_string(); "Closing session");
 
         {
-            let mut sessions = state.lock().await;
+            let mut sessions = client_connections.lock().await;
             sessions.remove(&self.id);
             info!(target: "server_events", session_id=self.get_id(); "Session removed from state");
         }

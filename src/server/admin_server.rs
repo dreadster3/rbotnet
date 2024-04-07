@@ -13,8 +13,8 @@ use super::state::{self, State};
 pub struct AdminServer {
     listener: TcpListener,
 
-    state: State,
-    client_state: State,
+    admin_connections: State,
+    client_connections: State,
 
     limit_connections: Arc<Semaphore>,
 }
@@ -25,8 +25,8 @@ impl AdminServer {
 
         Ok(Self {
             listener,
-            client_state: Arc::clone(&client_state),
-            state: state::new(),
+            client_connections: Arc::clone(&client_state),
+            admin_connections: state::new(),
             limit_connections: Arc::new(Semaphore::new(1000)),
         })
     }
@@ -43,13 +43,23 @@ impl AdminServer {
                 .unwrap();
 
             let socket = self.accept().await?;
-            let state = Arc::clone(&self.state);
-            let (mut session, transmitter) = AdminSession::new(socket).await?;
+            let admin_connections = Arc::clone(&self.admin_connections);
+            let (mut admin_session, transmitter) = AdminSession::new(socket).await?;
 
-            state::add_session(Arc::clone(&state), session.get_id(), transmitter).await;
+            let connection = state::Connection::new(
+                admin_session.get_id().to_string(),
+                admin_session.get_address().to_owned(),
+                transmitter,
+            );
 
+            state::add_connection(Arc::clone(&admin_connections), connection).await;
+
+            let client_connections = Arc::clone(&self.client_connections);
             tokio::spawn(async move {
-                session.handle(state).await.unwrap();
+                admin_session
+                    .handle(admin_connections, client_connections)
+                    .await
+                    .unwrap();
                 drop(permit);
             });
         }

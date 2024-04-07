@@ -3,7 +3,7 @@ use std::sync::Arc;
 use tokio::{net::TcpStream, sync::Semaphore};
 
 use crate::server::session::Session;
-use crate::server::state::State;
+use crate::server::state::{Connection, State};
 
 use super::state;
 
@@ -47,8 +47,13 @@ impl Server {
             let (mut session, transmitter) = Session::new(socket).await?;
             let session_id = session.get_id();
             let state = Arc::clone(&self.state);
+            let connection = Connection::new(
+                session_id.to_string(),
+                session.get_address().to_owned(),
+                transmitter,
+            );
 
-            state::add_session(Arc::clone(&state), session_id, transmitter).await;
+            state::add_connection(Arc::clone(&state), connection).await;
 
             tokio::spawn(async move {
                 session.handle(state).await.unwrap();
