@@ -6,6 +6,7 @@ use tokio::sync::{Mutex, Semaphore};
 use crate::{
     connection::Connection,
     context::{known_keys, Context, ContextDataType},
+    log::log_targets,
     session::{Session, SessionError},
 };
 
@@ -19,6 +20,7 @@ type Result<T> = std::result::Result<T, ServerError>;
 
 #[derive(Debug)]
 pub struct Server {
+    id: String,
     listener: tokio::net::TcpListener,
     semaphore: Arc<Semaphore>,
     connections: Arc<Mutex<HashMap<String, Connection>>>,
@@ -28,16 +30,22 @@ pub struct Server {
 
 impl Server {
     pub async fn new(host: &str, port: u16) -> Result<Server> {
+        let id = uuid::Uuid::new_v4().to_string();
         let addr = format!("{}:{}", host, port);
         let listener = tokio::net::TcpListener::bind(&addr).await?;
 
         Ok(Server {
+            id,
             listener,
             semaphore: Arc::new(Semaphore::new(1000)),
             connections: Arc::new(Mutex::new(HashMap::new())),
 
             context: Arc::new(Mutex::new(Context::new())),
         })
+    }
+
+    pub fn get_id(&self) -> &str {
+        &self.id
     }
 
     pub fn get_connections(&self) -> Arc<Mutex<HashMap<String, Connection>>> {
@@ -59,9 +67,10 @@ impl Server {
     }
 
     pub async fn run(self) -> Result<()> {
-        info!(target: "server_events", "Accepting connections on: {}", self.listener.local_addr()?);
+        info!(target: log_targets::SERVER_EVENTS_TARGET, server=self.get_id(); "Accepting connections on: {}", self.listener.local_addr()?);
 
         loop {
+            let server_id = self.get_id().to_string();
             let permit = self.semaphore.clone().acquire_owned().await.unwrap();
             let socket = self.accept().await?;
 
@@ -80,14 +89,15 @@ impl Server {
                     ContextDataType::Connections(self.connections.clone()),
                 );
             }
+
             tokio::spawn(async move {
                 let result = match session.handle(context).await {
                     Err(SessionError::EndOfStream) => {
-                        info!(target: "server_events", session_id=session.get_id(); "Received end of stream");
+                        info!(target: log_targets::SESSION_EVENTS_TARGET, server=server_id, session_id=session.get_id(); "Received end of stream");
                         Ok(())
                     }
                     Err(e) => {
-                        error!(target: "server_events", session_id=session.get_id(); "Error handling session: {}", e);
+                        error!(target: log_targets::SESSION_EVENTS_TARGET, server=server_id, session_id=session.get_id(); "Error handling session: {}", e);
                         Err(e)
                     }
                     _ => Ok(()),
@@ -110,17 +120,18 @@ impl Server {
         loop {
             match self.listener.accept().await {
                 Ok((socket, _)) => {
+                    info!(target: log_targets::SERVER_EVENTS_TARGET, server=self.get_id(); "Accepted connection from: {}", socket.peer_addr()?);
                     return Ok(socket);
                 }
                 Err(e) => {
-                    info!(target: "server_events", "Error accepting connection: {}", e);
+                    info!(target: log_targets::SERVER_EVENTS_TARGET, server=self.get_id(); "Error accepting connection: {}", e);
                     if backoff > 16 {
                         return Err(ServerError::IOError(e));
                     }
                 }
             }
 
-            debug!(target: "server_events", "Backing off for {} seconds", backoff);
+            debug!(target: log_targets::SERVER_EVENTS_TARGET, server=self.get_id(); "Backing off for {} seconds", backoff);
             tokio::time::sleep(std::time::Duration::from_secs(backoff)).await;
 
             backoff *= 2;

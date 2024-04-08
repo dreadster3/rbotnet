@@ -30,15 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         async_json::new_writer(stdout()),
     ]);
 
-    let admin = MultiWriter::new(vec![
-        async_json::new_writer(open_options.open("logs/admin_server.log").await?),
-        async_json::new_writer(stdout()),
-    ]);
-
-    Builder::new()
-        .with_default_writer(Box::new(default))
-        .with_target_writer("admin*", Box::new(admin))
-        .init();
+    Builder::new().with_default_writer(Box::new(default)).init();
 
     let client_server = Server::new(host, port).await.unwrap();
     let clinet_connections = client_server.get_connections();

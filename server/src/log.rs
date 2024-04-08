@@ -23,3 +23,8 @@ impl Writer for MultiWriter {
         Ok(())
     }
 }
+
+pub mod log_targets {
+    pub const SESSION_EVENTS_TARGET: &str = "session_events";
+    pub const SERVER_EVENTS_TARGET: &str = "server_events";
+}
