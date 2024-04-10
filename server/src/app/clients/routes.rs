@@ -1,6 +1,6 @@
 use crate::websocket::{messages::ListSessions, session::BotSession};
 use crate::AppState;
-use actix_web::{get, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{get, web, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 
 type Result = std::result::Result<HttpResponse, actix_web::Error>;

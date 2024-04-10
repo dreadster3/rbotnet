@@ -5,7 +5,7 @@ use actix::{
     ResponseActFuture, WrapFuture,
 };
 use log::info;
-use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
+use tokio::sync::{Mutex};
 
 use super::messages::{Connected, Disconnected, ListSessions, Message};
 use serde::Serialize;

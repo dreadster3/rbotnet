@@ -1,4 +1,4 @@
-use std::sync::Arc;
+
 
 use actix::Actor;
 use actix_web::middleware::{Logger, NormalizePath};

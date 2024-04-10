@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use actix::{
-    dev::ContextFutureSpawner, Actor, ActorContext, ActorFutureExt, ActorTryFutureExt, Addr,
+    dev::ContextFutureSpawner, Actor, ActorContext, ActorFutureExt, Addr,
     AsyncContext, Handler, StreamHandler, WrapFuture,
 };
 use actix_web_actors::ws;
