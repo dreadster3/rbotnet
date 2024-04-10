@@ -1,12 +1,14 @@
 use super::server::BotConnection;
 use std::net::SocketAddr;
 
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Sync + Send>>;
+
 #[derive(actix::Message)]
 #[rtype(result = "()")]
 pub struct Message(pub String);
 
 #[derive(actix::Message)]
-#[rtype(String)]
+#[rtype(result = "Result<String>")]
 pub struct Connected {
     pub id: String,
     pub address: SocketAddr,

@@ -8,11 +8,12 @@ type Result = std::result::Result<HttpResponse, actix_web::Error>;
 #[get("")]
 pub async fn index(state: web::Data<AppState>) -> Result {
     let server = state.server();
-    if let Ok(sessions) = server.send(ListSessions).await {
-        return Ok(HttpResponse::Ok().json(sessions));
-    }
+    let sessions = match server.send(ListSessions).await {
+        Ok(sessions) => sessions,
+        Err(e) => return Ok(HttpResponse::InternalServerError().body(e.to_string())),
+    };
 
-    return Ok(HttpResponse::InternalServerError().finish());
+    return Ok(HttpResponse::Ok().json(sessions));
 }
 
 #[get("ws")]
@@ -22,7 +23,15 @@ pub async fn websocket(
     stream: web::Payload,
 ) -> Result {
     let peer_address = req.peer_addr().unwrap();
-    let session = BotSession::new(state.server(), peer_address);
+    let semaphore = state.semaphore();
+    let permit = match semaphore.try_acquire_owned() {
+        Ok(permit) => permit,
+        Err(_) => {
+            return Ok(HttpResponse::ServiceUnavailable().finish());
+        }
+    };
+
+    let session = BotSession::new(state.server(), peer_address, permit);
 
     ws::start(session, &req, stream)
 }

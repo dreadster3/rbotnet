@@ -5,6 +5,7 @@ use actix::{
     AsyncContext, Handler, StreamHandler, WrapFuture,
 };
 use actix_web_actors::ws;
+use tokio::sync::OwnedSemaphorePermit;
 
 use super::{
     messages::{Connected, Disconnected, Message},
@@ -15,15 +16,17 @@ pub struct BotSession {
     id: String,
     address: SocketAddr,
 
+    permit: OwnedSemaphorePermit,
     server: Addr<BotServer>,
 }
 
 impl BotSession {
-    pub fn new(server: Addr<BotServer>, address: SocketAddr) -> Self {
+    pub fn new(server: Addr<BotServer>, address: SocketAddr, permit: OwnedSemaphorePermit) -> Self {
         return Self {
             id: String::new(),
             address,
             server,
+            permit,
         };
     }
 }
@@ -49,7 +52,7 @@ impl Actor for BotSession {
             .into_actor(self)
             .then(|res, act, ctx| {
                 match res {
-                    Ok(id) => {
+                    Ok(Ok(id)) => {
                         act.id = id;
                     }
                     _ => ctx.stop(),
