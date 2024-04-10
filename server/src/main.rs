@@ -1,48 +1,28 @@
-use context::{known_keys, ContextDataType};
-use log::MultiWriter;
-use server::Server;
-use structured_logger::{async_json, Builder};
-use tokio::{fs::OpenOptions, io::stdout};
+use actix::Actor;
+use actix_web::middleware::{Logger, NormalizePath};
+use actix_web::{web, App, HttpServer};
+use server::websocket::server::BotServer;
+use server::{app, AppState};
 
-pub mod connection;
-pub mod context;
-pub mod log;
-pub mod server;
-pub mod session;
-pub mod types;
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let log_env = env_logger::Env::new().default_filter_or("info");
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let host = "127.0.0.1";
-    let port = 8080;
+    env_logger::init_from_env(log_env);
 
-    let mut open_options = OpenOptions::new();
-    open_options
-        .create(true)
-        .truncate(false)
-        .read(false)
-        .write(true)
-        .append(true);
+    // Start the bot server
+    let bot_server = BotServer::new().start();
 
-    // Write to multiple destinations
-    let default = MultiWriter::new(vec![
-        async_json::new_writer(open_options.open("logs/server.log").await?),
-        async_json::new_writer(stdout()),
-    ]);
+    let app_state = AppState::new(bot_server);
 
-    Builder::new().with_default_writer(Box::new(default)).init();
-
-    let client_server = Server::new(host, port).await.unwrap();
-    let clinet_connections = client_server.get_connections();
-    let admin_server = Server::new(host, port + 1).await.unwrap();
-    admin_server
-        .set_to_context(
-            known_keys::CONNECTIONS_KEY,
-            ContextDataType::from(clinet_connections),
-        )
-        .await;
-
-    tokio::try_join!(client_server.run(), admin_server.run())?;
-
-    return Ok(());
+    return HttpServer::new(move || {
+        return App::new()
+            .app_data(web::Data::new(app_state.clone()))
+            .wrap(Logger::default())
+            .wrap(NormalizePath::trim())
+            .configure(app::routes::register_routes);
+    })
+    .bind(("127.0.0.1", 8080))?
+    .run()
+    .await;
 }
