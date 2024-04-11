@@ -10,7 +10,6 @@ impl Serialize for Command {
     fn serialize(&self) -> Result<String, SerializationError> {
         return match self {
             Command::Heartbeat => Ok("heartbeat".to_string()),
-            _ => panic!("Invalid command"),
         };
     }
 }
@@ -22,7 +21,7 @@ impl Deserialize for Command {
 
         return match word.as_str() {
             "heartbeat" => Ok(Command::Heartbeat),
-            _ => panic!("Invalid command: {}", word),
+            _ => Err(DeserializationError::InvalidCommand),
         };
     }
 }
