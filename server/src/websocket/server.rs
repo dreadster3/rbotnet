@@ -5,12 +5,13 @@ use actix::{
     ResponseActFuture, WrapFuture,
 };
 use log::info;
-use tokio::sync::{Mutex};
+use serde::Serialize as JsonSerialize;
+use tokio::sync::Mutex;
 
-use super::messages::{Connected, Disconnected, ListSessions, Message};
-use serde::Serialize;
+use super::messages::{BroadcastCommand, Connected, Disconnected, ListSessions, Message};
+use protocol::commands::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, JsonSerialize)]
 pub struct BotConnection {
     id: String,
     address: SocketAddr,
@@ -93,5 +94,28 @@ impl Handler<ListSessions> for BotServer {
         }
         .into_actor(self)
         .boxed_local()
+    }
+}
+
+impl<T> Handler<BroadcastCommand<T>> for BotServer
+where
+    T: Serialize + Deserialize,
+{
+    type Result = super::Result<()>;
+
+    fn handle(&mut self, msg: BroadcastCommand<T>, ctx: &mut Self::Context) -> Self::Result {
+        let sessions = self.sessions();
+        let serialized_msg = msg.0.serialize()?;
+
+        async move {
+            let sessions = sessions.lock().await;
+            for session in sessions.values() {
+                session.recipient.do_send(Message(serialized_msg.clone()));
+            }
+        }
+        .into_actor(self)
+        .wait(ctx);
+
+        Ok(())
     }
 }

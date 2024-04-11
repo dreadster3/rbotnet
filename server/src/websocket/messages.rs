@@ -1,9 +1,10 @@
+use protocol::commands::{Deserialize, Serialize};
+
 use super::server::BotConnection;
+use super::Result;
 use std::net::SocketAddr;
 
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Sync + Send>>;
-
-#[derive(actix::Message)]
+#[derive(actix::Message, Clone)]
 #[rtype(result = "()")]
 pub struct Message(pub String);
 
@@ -42,3 +43,9 @@ impl Disconnected {
 #[derive(actix::Message)]
 #[rtype(result = "Vec<BotConnection>")]
 pub struct ListSessions;
+
+#[derive(actix::Message)]
+#[rtype(result = "Result<()>")]
+pub struct BroadcastCommand<T>(pub T)
+where
+    T: Serialize + Deserialize;

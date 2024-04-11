@@ -1004,6 +1004,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "protocol"
+version = "0.1.0"
+
+[[package]]
 name = "quote"
 version = "1.0.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1188,6 +1192,7 @@ dependencies = [
  "env_logger",
  "futures",
  "log",
+ "protocol",
  "serde",
  "serde_json",
  "tokio",

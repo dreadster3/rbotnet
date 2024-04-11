@@ -1,8 +1,8 @@
 use std::net::SocketAddr;
 
 use actix::{
-    dev::ContextFutureSpawner, Actor, ActorContext, ActorFutureExt, Addr,
-    AsyncContext, Handler, StreamHandler, WrapFuture,
+    dev::ContextFutureSpawner, Actor, ActorContext, ActorFutureExt, Addr, AsyncContext, Handler,
+    StreamHandler, WrapFuture,
 };
 use actix_web_actors::ws;
 use tokio::sync::OwnedSemaphorePermit;
@@ -16,7 +16,7 @@ pub struct BotSession {
     id: String,
     address: SocketAddr,
 
-    permit: OwnedSemaphorePermit,
+    _permit: OwnedSemaphorePermit,
     server: Addr<BotServer>,
 }
 
@@ -26,7 +26,7 @@ impl BotSession {
             id: String::new(),
             address,
             server,
-            permit,
+            _permit: permit,
         };
     }
 }

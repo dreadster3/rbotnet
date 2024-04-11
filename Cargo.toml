@@ -15,7 +15,7 @@ tokio-stream = "0.1.15"
 futures = "0.3.30"
 
 [workspace]
-members = ["server"]
+members = ["server", "protocol"]
 
 [[bin]]
 name = "rbnet_server"
