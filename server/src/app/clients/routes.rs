@@ -1,23 +1,12 @@
 use crate::websocket::{messages::ListSessions, session::BotSession};
 use crate::AppState;
-use actix_web::{get, post, web, HttpRequest, HttpResponse};
+use actix_web::{get, web, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 
 type Result = std::result::Result<HttpResponse, actix_web::Error>;
 
 #[get("")]
 pub async fn index(state: web::Data<AppState>) -> Result {
-    let server = state.server();
-    let sessions = match server.send(ListSessions).await {
-        Ok(sessions) => sessions,
-        Err(e) => return Ok(HttpResponse::InternalServerError().body(e.to_string())),
-    };
-
-    return Ok(HttpResponse::Ok().json(sessions));
-}
-
-#[post("")]
-pub async fn broadcast_command(state: web::Data<AppState>) -> Result {
     let server = state.server();
     let sessions = match server.send(ListSessions).await {
         Ok(sessions) => sessions,
@@ -48,7 +37,7 @@ pub async fn websocket(
 }
 
 pub fn register_routes(cfg: &mut actix_web::web::ServiceConfig) {
-    let scope = actix_web::web::scope("clients")
+    let scope = actix_web::web::scope("sessions")
         .service(index)
         .service(websocket);
 
