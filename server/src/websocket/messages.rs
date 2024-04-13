@@ -49,3 +49,13 @@ pub struct ListSessions;
 pub struct BroadcastCommand<T>(pub T)
 where
     T: Serialize + Deserialize;
+
+#[derive(actix::Message)]
+#[rtype(result = "Result<()>")]
+pub struct SendCommand<T>(pub String, pub T)
+where
+    T: Serialize + Deserialize;
+
+#[derive(actix::Message, Clone)]
+#[rtype(result = "()")]
+pub struct Disconnect(pub String);

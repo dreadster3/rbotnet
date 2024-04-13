@@ -17,7 +17,7 @@ impl AppState {
     pub fn new(server: Addr<BotServer>) -> Self {
         return Self {
             server,
-            semaphore: Arc::new(Semaphore::new(1000)),
+            semaphore: Arc::new(Semaphore::new(1)),
         };
     }
 

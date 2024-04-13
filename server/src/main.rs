@@ -1,5 +1,3 @@
-
-
 use actix::Actor;
 use actix_web::middleware::{Logger, NormalizePath};
 use actix_web::{web, App, HttpServer};

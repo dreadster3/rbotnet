@@ -8,7 +8,7 @@ use actix_web_actors::ws;
 use tokio::sync::OwnedSemaphorePermit;
 
 use super::{
-    messages::{Connected, Disconnected, Message},
+    messages::{Connected, Disconnect, Disconnected, Message},
     server::BotServer,
 };
 
@@ -35,7 +35,14 @@ impl Handler<Message> for BotSession {
     type Result = ();
 
     fn handle(&mut self, msg: Message, ctx: &mut Self::Context) {
-        ctx.text(msg.0);
+        let msg = msg.0;
+
+        if msg == "disconnect" {
+            ctx.stop();
+            return;
+        }
+
+        ctx.text(msg);
     }
 }
 

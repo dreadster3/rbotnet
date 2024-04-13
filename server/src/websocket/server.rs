@@ -4,11 +4,14 @@ use actix::{
     dev::ContextFutureSpawner, Actor, ActorFutureExt, AsyncContext, Handler, Recipient,
     ResponseActFuture, WrapFuture,
 };
+use futures::FutureExt;
 use log::info;
 use serde::Serialize as JsonSerialize;
 use tokio::sync::Mutex;
 
-use super::messages::{BroadcastCommand, Connected, Disconnected, ListSessions, Message};
+use super::messages::{
+    BroadcastCommand, Connected, Disconnect, Disconnected, ListSessions, Message, SendCommand,
+};
 use protocol::commands::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, JsonSerialize)]
@@ -117,5 +120,47 @@ where
         .wait(ctx);
 
         Ok(())
+    }
+}
+
+impl<T> Handler<SendCommand<T>> for BotServer
+where
+    T: Serialize + Deserialize,
+{
+    type Result = ResponseActFuture<Self, super::Result<()>>;
+
+    fn handle(&mut self, msg: SendCommand<T>, ctx: &mut Self::Context) -> Self::Result {
+        let sessions = self.sessions();
+        let serialized_msg = msg.1.serialize().unwrap();
+
+        async move {
+            let sessions = sessions.lock().await;
+            if let Some(session) = sessions.get(&msg.0) {
+                session.recipient.do_send(Message(serialized_msg));
+                return Ok(());
+            }
+
+            Err("Client not found".into())
+        }
+        .into_actor(self)
+        .boxed_local()
+    }
+}
+
+impl Handler<Disconnect> for BotServer {
+    type Result = ();
+
+    fn handle(&mut self, msg: Disconnect, ctx: &mut Self::Context) {
+        let id = msg.0.clone();
+        let sessions = self.sessions();
+
+        async move {
+            let sessions = sessions.lock().await;
+            if let Some(session) = sessions.get(&id) {
+                session.recipient.do_send(Message("disconnect".to_string()));
+            }
+        }
+        .into_actor(self)
+        .wait(ctx);
     }
 }
