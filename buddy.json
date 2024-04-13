@@ -5,7 +5,7 @@
   "author": "dreadster3",
   "scripts": {
     "build": "cargo build",
-    "run:server": "cargo run --bin rbnet_server",
-    "run:client": "cargo run --bin rbnet_client"
+    "run:server": "cargo run --bin server",
+    "run:client": "cargo run --bin client"
   }
 }
