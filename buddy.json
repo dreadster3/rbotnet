@@ -5,6 +5,11 @@
   "author": "dreadster3",
   "scripts": {
     "build": "cargo build",
+    "build:release": "cargo build --release",
+    "build:server": "cargo build --bin server",
+    "build:server:release": "cargo build --release --bin server",
+    "build:client": "cargo build --bin client",
+    "build:client:release": "cargo build --release --bin client",
     "run:server": "cargo run --bin server",
     "run:client": "cargo run --bin client"
   }
