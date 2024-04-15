@@ -11,6 +11,7 @@ use futures_util::{
     StreamExt,
 };
 use log::debug;
+use protocol::commands::{command::Command, Deserialize};
 
 use super::{events::Connect, session::Session};
 
@@ -125,8 +126,25 @@ impl StreamHandler<StreamResult<awc::ws::Frame>> for Client {
     fn handle(&mut self, msg: StreamResult<awc::ws::Frame>, ctx: &mut Self::Context) {
         match msg {
             Ok(awc::ws::Frame::Text(text)) => {
-                println!("Received text frame: {:?}", String::from_utf8_lossy(&text));
+                let message = String::from_utf8_lossy(&text);
                 debug!("Received text frame: {:?}", text);
+
+                let command = match Command::deserialize(message.to_string()) {
+                    Ok(command) => command,
+                    Err(e) => {
+                        eprintln!("Error executing command: {:?}", e);
+                        return;
+                    }
+                };
+
+                async move {
+                    match command.execute().await {
+                        Ok(_) => (),
+                        Err(e) => eprintln!("Error executing command: {:?}", e),
+                    }
+                }
+                .into_actor(self)
+                .spawn(ctx);
             }
             Ok(awc::ws::Frame::Binary(bin)) => {
                 debug!("Received binary frame: {:?}", bin);

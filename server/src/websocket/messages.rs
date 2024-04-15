@@ -30,15 +30,7 @@ impl Connected {
 
 #[derive(actix::Message)]
 #[rtype(result = "()")]
-pub struct Disconnected {
-    pub id: String,
-}
-
-impl Disconnected {
-    pub fn new(id: String) -> Self {
-        return Self { id };
-    }
-}
+pub struct Disconnected(pub String);
 
 #[derive(actix::Message)]
 #[rtype(result = "Vec<BotConnection>")]

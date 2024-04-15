@@ -73,12 +73,13 @@ impl Handler<Disconnected> for BotServer {
     type Result = ();
 
     fn handle(&mut self, msg: Disconnected, ctx: &mut Self::Context) {
-        info!("Disconnected: {:?}", msg.id);
+        let session_id = msg.0.clone();
+        info!("Disconnected: {:?}", session_id);
         let sessions = self.sessions();
 
         async move {
             let mut sessions = sessions.lock().await;
-            sessions.remove(&msg.id);
+            sessions.remove(&session_id.clone());
         }
         .into_actor(self)
         .wait(ctx);

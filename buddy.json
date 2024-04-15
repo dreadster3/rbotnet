@@ -5,6 +5,9 @@
   "author": "dreadster3",
   "scripts": {
     "build": "cargo build",
+    "add:server": "cargo add --package server",
+    "add:client": "cargo add --package client",
+    "add:protocol": "cargo add --package protocol",
     "build:release": "cargo build --release",
     "build:server": "cargo build --bin server",
     "build:server:release": "cargo build --release --bin server",

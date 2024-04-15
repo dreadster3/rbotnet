@@ -2,7 +2,9 @@ use std::io::Cursor;
 
 use crate::utils::read_word;
 
-use super::{DeserializationError, Deserialize, SerializationError, Serialize};
+use super::{
+    command::CommandError, DeserializationError, Deserialize, SerializationError, Serialize,
+};
 
 pub struct Heartbeat {}
 
@@ -11,8 +13,9 @@ impl Heartbeat {
         return Heartbeat {};
     }
 
-    pub async fn execute(&self) -> Result<(), Box<dyn std::error::Error>> {
-        println!("Heartbeat");
+    pub async fn execute(&self) -> Result<(), CommandError> {
+        let time = chrono::Utc::now().timestamp();
+        println!("Heartbeat: {}", time);
         return Ok(());
     }
 }
@@ -25,8 +28,8 @@ impl Serialize for Heartbeat {
 
 impl Deserialize for Heartbeat {
     fn deserialize(from: String) -> Result<Self, DeserializationError> {
-        let cursor = Cursor::new(from);
-        let word = read_word(cursor)?;
+        let mut cursor = Cursor::new(from);
+        let word = read_word(&mut cursor)?;
 
         return match word.as_str() {
             "heartbeat" => Ok(Heartbeat::new()),

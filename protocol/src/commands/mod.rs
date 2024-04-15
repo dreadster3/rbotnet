@@ -1,5 +1,6 @@
 pub mod command;
 pub mod heartbeat;
+pub mod request;
 
 #[derive(Debug)]
 pub enum SerializationError {

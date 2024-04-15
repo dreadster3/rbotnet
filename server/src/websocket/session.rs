@@ -71,7 +71,7 @@ impl Actor for BotSession {
     }
 
     fn stopping(&mut self, _: &mut Self::Context) -> actix::prelude::Running {
-        let disconnection = Disconnected::new(self.id.clone());
+        let disconnection = Disconnected(self.id.clone());
 
         self.server.do_send(disconnection);
 
